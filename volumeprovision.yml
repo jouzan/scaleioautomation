@@ -1,0 +1,30 @@
+- name: Volume provision
+  hosts: Primary-MDM
+  environment:
+    PD: 'PD1' 
+    POOL: 'POOL1'
+  tasks:
+    - name: Provision new volumes 
+      shell: | 
+        scli --login --username admin --password P@ssw0rd --approve_certificate
+        sleep 1 
+         
+        scli --add_volume --protection_domain_name "$PD" --storage_pool_name "$POOL" --thin_provisioned --size_gb 8 --volume_name VOL001
+        sleep 1      
+        scli --add_volume --protection_domain_name "$PD" --storage_pool_name "$POOL" --thin_provisioned --size_gb 8 --volume_name VOL002
+        sleep 1
+        scli --add_volume --protection_domain_name "$PD" --storage_pool_name "$POOL" --thin_provisioned --size_gb 8 --volume_name VOL003
+        sleep 1
+        scli --add_volume --protection_domain_name "$PD" --storage_pool_name "$POOL" --thin_provisioned --size_gb 8 --volume_name VOL004
+        sleep 1
+        scli --add_volume --protection_domain_name "$PD" --storage_pool_name "$POOL" --thin_provisioned --size_gb 8 --volume_name VOL005
+        sleep 1
+        scli --add_volume --protection_domain_name "$PD" --storage_pool_name "$POOL" --thin_provisioned --size_gb 8 --volume_name VOL006
+        sleep 1
+        scli --add_volume --protection_domain_name "$PD" --storage_pool_name "$POOL" --thin_provisioned --size_gb 8 --volume_name VOL007
+        sleep 1
+        scli --add_volume --protection_domain_name "$PD" --storage_pool_name "$POOL" --thin_provisioned --size_gb 8 --volume_name VOL008
+        sleep 1
+        scli --add_volume --protection_domain_name "$PD" --storage_pool_name "$POOL" --thin_provisioned --size_gb 8 --volume_name VOL009
+        sleep 1
+        scli --add_volume --protection_domain_name "$PD" --storage_pool_name "$POOL" --thin_provisioned --size_gb 8 --volume_name VOL010

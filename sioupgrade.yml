@@ -1,0 +1,266 @@
+- name: ScaleIO Upgrade
+  hosts: all-sio-servers
+  tasks:
+    - name: Copy ScaleIO rpm files
+      copy:
+        src: /root/ScaleIOMdmSdsLia2.0.1.4Upgrade/{{ item }}
+        dest: /tmp/ 
+      with_items:
+        - 'EMC-ScaleIO-lia-2.0-14000.231.el7.x86_64.rpm'
+        - 'EMC-ScaleIO-mdm-2.0-14000.231.el7.x86_64.rpm'
+        - 'EMC-ScaleIO-sds-2.0-14000.231.el7.x86_64.rpm'
+- name: send mail
+  hosts: Ansible
+  tasks:
+    - name: Send mail
+      shell: |
+        echo "All rpm's were successfully copied to all servers" | mail -s "New SIO2.0-1400 RPM Copied to all servers " administrator@testlab.ad
+
+
+
+
+- name: Upgrade LIA on all servers 
+  hosts: all-sio-servers
+  tasks:
+    - name: Upgrade LIA on all servers
+      yum:
+        name: "{{ item }}"
+        state: installed
+      with_items:
+        - '/tmp/EMC-ScaleIO-lia-2.0-14000.231.el7.x86_64.rpm'
+       
+- name: send mail
+  hosts: Ansible
+  tasks:
+    - name: Send mail
+      shell: |
+        echo "LIA Upgrade completed successfully on all servers" | mail -s "LIA SIO2.0-1400 Upgrade completed " administrator@testlab.ad
+
+
+
+
+
+- name: Remove MDM2 and TB from Cluster
+  hosts: Primary-MDM
+  tasks:
+    - name: Remove MDM2 and TB from Cluster
+      shell: |
+        scli --login --username admin --password P@ssw0rd --approve_certificate
+        sleep 3
+        scli --start_upgrade
+        sleep 2 
+        yes | scli --allow_commands_during_upgrade 
+        scli --switch_cluster_mode --cluster_mode 1_node --remove_slave_mdm_ip 10.100.100.102 --remove_tb_ip 10.100.100.103
+        sleep 10
+
+
+- name: Upgrade MDM2 and TB rpm
+  hosts: MDM-TB
+  tasks:
+    - name: Upgrade MDM2 and TB rpm
+      shell: |
+        /opt/emc/scaleio/mdm/bin/delete_service.sh
+        rpm -U /tmp/EMC-ScaleIO-mdm-2.0-14000.231.el7.x86_64.rpm 
+        sleep 10
+        /opt/emc/scaleio/mdm/bin/create_service.sh
+        sleep 10 
+
+
+- name: Add back MDM2 and TB to cluster and switch MDM roles
+  hosts: Primary-MDM
+  tasks:
+    - name: Add back MDM2 and TB to cluster and switch MDM roles
+      shell: |
+        scli --login --username admin --password P@ssw0rd --approve_certificate
+        sleep 3
+        yes | scli --allow_commands_during_upgrade
+        scli --switch_cluster_mode --cluster_mode 3_node --add_slave_mdm_ip 10.100.100.102 --add_tb_ip 10.10.100.103
+        sleep 20
+        scli --switch_mdm_ownership --new_master_mdm_ip 10.100.100.102
+        sleep 10
+
+- name: send mail
+  hosts: Ansible
+  tasks:
+    - name: Send mail
+      shell: |
+        echo "MDM2 & TB Are now running new SIO 2.0-1400, Upgrade completed! now the MDM upgrade task is under way" | mail -s "MDM2 & TB SIO2.0-1400 Upgrade completed" administrator@testlab.ad
+    
+ 
+
+- name: Remoce MDM1 and TB from the clsuter 
+  hosts: Secondary-MDM
+  tasks:
+    - name: Remove MDM1 and TB from cluster 
+      shell: |
+        scli --login --username admin --password P@ssw0rd --approve_certificate
+        sleep 3
+        yes | scli --allow_commands_during_upgrade
+        scli --switch_cluster_mode --cluster_mode 1_node --remove_slave_mdm_ip 10.100.100.101 --remove_tb_ip 10.100.100.103
+        sleep 10
+
+
+
+- name: Upgrade MDM1 rpm 
+  hosts: Primary-MDM
+  tasks:
+    - name: Upgrade MDM1 rpm
+      shell: |
+        /opt/emc/scaleio/mdm/bin/delete_service.sh
+        rpm -U /tmp/EMC-ScaleIO-mdm-2.0-14000.231.el7.x86_64.rpm 
+        sleep 5
+        /opt/emc/scaleio/mdm/bin/create_service.sh
+
+
+
+
+- name: Add back MDM1 and TB to cluster and switch MDM roles 
+  hosts: Secondary-MDM
+  tasks:
+    - name: Add back MDM1 and TB to cluster and switch MDM roles 
+      shell: |
+        scli --login --username admin --password P@ssw0rd --approve_certificate
+        sleep 3
+        yes | scli --allow_commands_during_upgrade
+        scli --switch_cluster_mode --cluster_mode 3_node --add_slave_mdm_ip 10.100.100.101 --add_tb_ip 10.100.100.103
+        sleep 10
+        scli --switch_mdm_ownership --new_master_mdm_ip 10.100.100.101
+        sleep 30
+
+- name: send mail
+  hosts: Ansible
+  tasks:
+    - name: Send mail
+      shell: |
+        echo "MDM1 is now running new SIO 2.0-1400, Upgrade completed! now the SDS'S upgrade task is under way" | mail -s "MDM1SIO2.0-1400 Upgrade completed" administrator@testlab.ad
+
+
+- name: SDS1 UPGRADE
+  hosts: Primary-MDM
+  tasks:
+    - name: SDS1 Maitenance mode
+      shell: |
+        scli --login --username admin --password P@ssw0rd --approve_certificate
+        scli --enter_maintenance_mode --sds_name sds1 
+        sleep 5
+
+- name: SDS1 UPGRADE
+  hosts: SDS1
+  tasks:
+    - name: SDS1 RPM UPGRADE
+      shell: |
+        rpm -U /tmp/EMC-ScaleIO-sds-2.0-14000.231.el7.x86_64.rpm
+        sleep 10
+
+- name: SDS1 UPGRADE
+  hosts: Primary-MDM
+  tasks:
+    - name: SDS1 Exit Maitenance mode
+      shell: |
+        scli --login --username admin --password P@ssw0rd --approve_certificate
+        scli --exit_maintenance_mode --sds_name sds1
+        sleep 60
+
+- name: send mail
+  hosts: Ansible
+  tasks:
+    - name: Send mail
+      shell: |
+        echo "SDS1 IS now running new SIO 2.0-1400, Upgrade completed! now the SDS2 upgrade task is under way" | mail -s "SDS1 SIO2.0-1400 Upgrade completed" administrator@testlab.ad
+
+
+
+
+
+
+
+
+- name: SDS2 UPGRADE
+  hosts: Primary-MDM
+  tasks:
+    - name: SDS2 Maitenance mode
+      shell: |
+        scli --login --username admin --password P@ssw0rd --approve_certificate
+        scli --enter_maintenance_mode --sds_name sds2
+        sleep 5
+
+- name: SDS2 UPGRADE
+  hosts: SDS2
+  tasks:
+    - name: SDS2 RPM UPGRADE
+      shell: |
+        rpm -U /tmp/EMC-ScaleIO-sds-2.0-14000.231.el7.x86_64.rpm
+        sleep 10
+
+- name: SDS2 UPGRADE
+  hosts: Primary-MDM
+  tasks:
+    - name: SDS2 Exit Maitenance mode
+      shell: |
+        scli --login --username admin --password P@ssw0rd --approve_certificate
+        scli --exit_maintenance_mode --sds_name sds2
+        sleep 60
+ 
+- name: send mail
+  hosts: Ansible
+  tasks:
+    - name: Send mail
+      shell: |
+        echo "SDS2 IS now running new SIO 2.0-1400, Upgrade completed! now the SDS3 upgrade task is under way" | mail -s "SDS2 SIO2.0-1400 Upgrade completed" administrator@testlab.ad
+        
+
+
+
+
+
+
+
+- name: SDS3 UPGRADE
+  hosts: Primary-MDM
+  tasks:
+    - name: SDS3 Maitenance mode
+      shell: |
+        scli --login --username admin --password P@ssw0rd --approve_certificate
+        scli --enter_maintenance_mode --sds_name sds3
+        sleep 5
+
+- name: SDS UPGRADE
+  hosts: SDS3
+  tasks:
+    - name: SDS3 RPM UPGRADE
+      shell: |
+        rpm -U /tmp/EMC-ScaleIO-sds-2.0-14000.231.el7.x86_64.rpm
+        sleep 10
+
+- name: SDS3 UPGRADE
+  hosts: Primary-MDM
+  tasks:
+    - name: SDS3 Exit Maintenance mode
+      shell: |
+        scli --login --username admin --password P@ssw0rd --approve_certificate
+        scli --exit_maintenance_mode --sds_name sds3
+        sleep 60
+        
+- name: send mail
+  hosts: Ansible
+  tasks:
+    - name: Send mail
+      shell: |
+        echo "SDS3 SIO 2.0-1400 Upgrade completed! now the SDS4 upgrade task is under way" | mail -s "SDS3 SIO2.0-1400 Upgrade completed" administrator@testlab.ad
+
+
+
+
+
+
+
+
+- name: send mail
+  hosts: Ansible
+  tasks:
+    - name: Send mail
+      shell: |
+        echo "SIO 2.0-1400 Upgrade completed!, you can go back to wathcing your favorit shows on netflix" | mail -s "SIO2.0-1400 Upgrade completed" administrator@testlab.ad
+
+
+

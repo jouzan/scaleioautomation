@@ -1,0 +1,52 @@
+- name: SIO SYSTEM EXPENTION
+  hosts: newsds4
+  tasks:
+    - name: Connect to host check
+      debug:
+
+    - name: COPY SIO RPMS
+      copy:
+        src: /tmp/{{ item }}
+        dest: /tmp/ 
+      with_items:
+        - 'EMC-ScaleIO-lia-2.0-14000.231.el7.x86_64.rpm'
+        - 'EMC-ScaleIO-sds-2.0-14000.231.el7.x86_64.rpm'
+
+    - name: Install ScaleIO rpm files
+      environment:
+        TOKEN: 'P@ssw0rd'
+      yum: 
+        name: "{{ item }}"
+        state: installed
+      with_items:
+        - '/tmp/EMC-ScaleIO-sds-2.0-14000.231.el7.x86_64.rpm'
+        - '/tmp/EMC-ScaleIO-lia-2.0-14000.231.el7.x86_64.rpm'
+
+- name: send mail
+  hosts: Ansible
+  tasks:
+    - name: Send mail
+      shell: |
+        echo "SIO Install LIA SDS on new  SDS4" | mail -s "LIA and SDS rpm's installed" administrator@testlab.ad
+
+
+
+- name: SIO SYSTEM EXPENTION
+  hosts: Primary-MDM
+  tasks:
+    - name: ADD SDS4
+      shell: | 
+        scli --login --username admin --password P@ssw0rd --approve_certificate
+        sleep 2
+         
+        scli --add_sds --sds_ip 10.100.100.104 --device_path /dev/sdb --protection_domain_name PD1 --storage_pool_name POOL1 --sds_name sds4 --i_am_sure
+        sleep 20
+
+- name: send mail
+  hosts: Ansible
+  tasks:
+    - name: Send mail
+      shell: |
+        echo "New SDS4 is now operational" | mail -s "SDS4 added to sio system" administrator@testlab.ad
+
+

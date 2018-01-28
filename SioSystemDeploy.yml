@@ -1,0 +1,159 @@
+- name: COPY SIO RPMS AND INSTALL SDS LIA
+  hosts: all-sio-servers
+  tasks:
+    - name: Connect to host check
+      debug:
+
+    - name: COPY SIO RPMS
+      copy:
+        src: /root/ScaleIO2.0.1.3Install/{{ item }}
+        dest: /tmp/ 
+      with_items:
+        - 'EMC-ScaleIO-lia-2.0-13000.211.el7.x86_64.rpm'
+        - 'EMC-ScaleIO-mdm-2.0-13000.211.el7.x86_64.rpm'
+        - 'EMC-ScaleIO-sds-2.0-13000.211.el7.x86_64.rpm'
+
+    - name: Install ScaleIO rpm files
+      environment:
+        TOKEN: 'P@ssw0rd'
+      yum: 
+        name: "{{ item }}"
+        state: installed
+      with_items:
+        - '/tmp/EMC-ScaleIO-sds-2.0-13000.211.el7.x86_64.rpm'
+        - '/tmp/EMC-ScaleIO-lia-2.0-13000.211.el7.x86_64.rpm'
+
+- name: send mail
+  hosts: Ansible
+  tasks:
+    - name: Send mail
+      shell: |
+        echo "SIO Install LIA SDS" | mail -s "LIA and SDS rpm's installed" administrator@testlab.ad
+
+
+
+
+- name: INSTALL MDM1 and MDM2
+  hosts: scaleio-install-mdm12
+  environment:
+    MDM_ROLE_IS_MANAGER: 1
+  tasks:
+    - name: INSTALL MDM1 and MDM2 
+      yum: 
+        name: "{{ item }}"
+        state: installed
+      with_items:
+        - '/tmp/EMC-ScaleIO-mdm-2.0-13000.211.el7.x86_64.rpm'
+
+
+- name: INSTALL TB
+  hosts: scaleio-install-TB
+  environment:
+    MDM_ROLE_IS_MANAGER: 0 
+  tasks:
+    - name: INSTALL TB
+      yum: 
+        name: /tmp/EMC-ScaleIO-mdm-2.0-13000.211.el7.x86_64.rpm 
+
+
+- name: send mail
+  hosts: Ansible
+  tasks:
+    - name: Send mail
+      shell: |
+        echo "SIO Install MDM'S" | mail -s "MDM rpm's installed" administrator@testlab.ad
+
+
+
+
+
+- name: SIO CLUSTER CONFIG
+  hosts: Primary-MDM
+  environment:
+    SDS1DATAIPS: '10.100.100.101,10.200.200.101' 
+    SDS2DATAIPS: '10.100.100.102,10.200.200.102'  
+    SDS3DATAIPS: '10.100.100.103,10.200.200.103'  
+    SDS1MGMTIP: '172.31.240.24'
+    SDS2MGMTIP: '172.31.240.55'
+  tasks:
+    - name: ScaleIO cluster configuration
+      shell: | 
+        scli --create_mdm_cluster --master_mdm_ip "$SDS1DATAIPS" --master_mdm_management_ip "$SDS1MGMTIP" --master_mdm_name mdm1 --accept_license --use_nonsecure_communication
+        sleep 4 
+        scli --login --username admin --password admin --approve_certificate
+        scli --set_password --old_password admin --new_password P@ssw0rd 
+        scli --login --username admin --password P@ssw0rd --approve_certificate
+        scli --add_standby_mdm --new_mdm_ip "$SDS2DATAIPS" --mdm_role manager --new_mdm_management_ip "$SDS2MGMTIP" --new_mdm_name mdm2
+        sleep 3
+        scli --add_standby_mdm --new_mdm_ip "$SDS3DATAIPS" --mdm_role tb --new_mdm_name tb 
+        scli --switch_cluster_mode --cluster_mode 3_node --add_slave_mdm_name mdm2 --add_tb_name tb 
+        
+        sleep 2
+         
+        scli --add_protection_domain --protection_domain_name PD1
+        scli --add_storage_pool --protection_domain_name PD1 --storage_pool_name POOL1
+        sleep 2       
+        scli --set_performance_parameters  --all_sds --all_sdc --apply_to_mdm --profile high_performance
+        scli --rename_system --new_name SIOSYSTEM
+        sleep 2
+
+        scli --login --username admin --password P@ssw0rd --approve_certificate
+        scli --add_sds --sds_ip "$SDS1DATAIPS" --device_path /dev/sdb --protection_domain_name PD1 --storage_pool_name POOL1 --sds_name sds1 --i_am_sure
+        sleep 20
+        scli --add_sds --sds_ip "$SDS2DATAIPS" --device_path /dev/sdb --protection_domain_name PD1 --storage_pool_name POOL1 --sds_name sds2 --i_am_sure
+        sleep 20
+        scli --add_sds --sds_ip "$SDS3DATAIPS" --device_path /dev/sdb --protection_domain_name PD1 --storage_pool_name POOL1 --sds_name sds3 --i_am_sure
+        sleep 20
+
+        scli --add_volume --protection_domain_name PD1 --storage_pool_name POOL1 --size_gb 8 --volume_name vol001
+        sleep 10
+        scli --add_volume --protection_domain_name PD1 --storage_pool_name POOL1 --size_gb 8 --volume_name vol002
+        sleep 10
+
+- name: send mail
+  hosts: Ansible
+  tasks:
+    - name: Send mail
+      shell: |
+        echo "SIO Install Cluster configured" | mail -s "SIO Clsuter configured volumes provisioned" administrator@testlab.ad
+
+
+
+- name: SDC INSTALL
+  hosts: all-sdc-servers
+  tasks:
+    - name: Copy ScaleIO rpm files
+      copy:
+        src: /root/ScaleIO2.0.1.3Install/{{ item }}
+        dest: /tmp/
+      with_items:
+        - 'EMC-ScaleIO-sdc-2.0-13000.211.el7.x86_64.rpm'
+
+    - name: Install ScaleIO sdc rpm file
+      environment:
+        MDM_IP: '172.31.240.24,172.31.240.55'
+      yum:
+        name: "{{ item }}"
+        state: installed
+      with_items:
+        - '/tmp/EMC-ScaleIO-sdc-2.0-13000.211.el7.x86_64.rpm'
+
+
+- name: MAPP VOLUMES TO SDC
+  hosts: Primary-MDM
+  tasks:
+    - name: MAPP VOLUMES TO SDC
+      shell: |
+        scli --login --username admin --password P@ssw0rd --approve_certificate
+        sleep 5
+        scli --map_volume_to_sdc --sdc_ip 172.31.240.24 --protection_domain_name PD1 --storage_pool_name POOL1 --volume_name vol001
+        scli --map_volume_to_sdc --sdc_ip 172.31.240.24 --protection_domain_name PD1 --storage_pool_name POOL1 --volume_name vol002
+
+
+- name: send mail
+  hosts: Ansible
+  tasks:
+    - name: Send mail
+      shell: |
+        echo "SDC Installed and registred" | mail -s "SDC installed/Registred and volumes mapped" administrator@testlab.ad
+
